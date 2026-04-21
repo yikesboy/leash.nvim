@@ -16,7 +16,7 @@ XDG_STATE_HOME="${DEV_STATE}-session" \
 XDG_RUNTIME_DIR="$DEV_RUNTIME" \
 NVIM_LOG_FILE="$DEV_LOG" \
 "$NVIM" --headless -u "$DEV_INIT" \
-  -c 'lua local leash = require("leash"); local session = leash.start({ fargs = {"codex", "hello", "world"} }); local loaded = assert(leash._session.load(session.id)); assert(loaded.id == session.id); assert(loaded.prompt_history[1] == "hello world")' \
+  -c 'lua local leash = require("leash"); leash.setup({ adapter = "noop", adapters = { noop = { command = "noop" } } }); local session = leash.start({ fargs = {"noop", "hello", "world"} }); local loaded = assert(leash._session.load(session.id)); assert(loaded.id == session.id); assert(loaded.prompt_history[1] == "hello world")' \
   -c 'qa'
 
 XDG_STATE_HOME="${DEV_STATE}-redaction" \

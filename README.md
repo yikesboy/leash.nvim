@@ -4,8 +4,8 @@
 
 The current implementation provides the plugin skeleton, configuration, command
 registration, session state, local persistence, adapter registry, streaming job
-runner, and deterministic fake adapter test harness. Real agent execution,
-worktree capture, diff review, and accept/reject behavior are not implemented
+runner, deterministic fake adapter test harness, and Codex command/JSONL adapter.
+Worktree capture, diff review, and accept/reject behavior are not implemented
 yet.
 
 ## Current Status
@@ -25,12 +25,17 @@ What works now:
 - A fake adapter can run deterministic headless jobs through the real runner.
 - The fake fixture can emit JSONL, split JSON lines, write files, delete files,
   fail with a chosen exit code, and sleep until aborted.
+- The Codex adapter can build `codex exec --json` and `codex exec resume`
+  commands and parse Codex JSONL events.
 - Secret-like keys such as `env`, `token`, `secret`, `authorization`, and
   `api_key` are redacted before persistence.
 
 What is intentionally still pending:
 
-- Running Codex or Claude.
+- Running Codex in the live workspace by default. Codex execution is deferred
+  until isolated worktree capture exists, unless isolation is explicitly
+  disabled.
+- Running Claude.
 - Creating isolated Git worktrees.
 - Scanning changed files from a worktree.
 - Opening the review UI.
@@ -107,7 +112,7 @@ form and pin the branch you want to review:
 ```lua
 {
   "OWNER/leash.nvim",
-  branch = "feature/fake-adapter-and-test-harness",
+  branch = "feature/codex-adapter",
   lazy = false,
   config = function()
     require("leash").setup({})
@@ -230,5 +235,5 @@ Feature work should happen on `feature/<workpackage-name>` branches. The current
 branch is:
 
 ```text
-feature/fake-adapter-and-test-harness
+feature/codex-adapter
 ```

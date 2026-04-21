@@ -7,12 +7,21 @@ vim.opt.packpath:prepend(plugin_root)
 
 vim.g.mapleader = " "
 
-require("leash").setup({})
+require("leash").setup({
+  adapter = "fake",
+  adapters = {
+    fake = {
+      command = vim.v.progpath,
+    },
+  },
+})
+
+require("leash.adapters").register(require("leash.adapters.fake"))
 
 vim.api.nvim_create_user_command("LeashDevSmoke", function()
   local leash = require("leash")
   local session = leash.start({
-    fargs = { "codex", "dev", "smoke" },
+    fargs = { "fake", "dev", "smoke" },
   })
 
   vim.notify("leash.nvim dev smoke created session " .. session.id, vim.log.levels.INFO)
@@ -28,6 +37,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
       "",
       "Commands to try:",
       "",
+      "  :LeashStart fake inspect this plugin",
       "  :LeashStart codex inspect this plugin",
       "  :LeashResume",
       "  :LeashAbort",
