@@ -1,6 +1,8 @@
 local M = {}
 
 local config = require("leash.config")
+local adapters = require("leash.adapters")
+local job_runner = require("leash.runner.job")
 local session = require("leash.session")
 local state = require("leash.state")
 local persist = require("leash.persist")
@@ -56,6 +58,64 @@ local function parse_start_opts(opts)
   }
 end
 
+local function run_adapter(adapter, current_session, parsed)
+  local adapter_config = config.get().adapters[parsed.adapter] or {}
+  local spec = adapter.start({
+    adapter = parsed.adapter,
+    config = adapter_config,
+    cwd = current_session.cwd,
+    prompt = parsed.prompt,
+    root = current_session.root,
+    session = current_session,
+  })
+
+  if type(spec) ~= "table" then
+    error(("leash.nvim: adapter %s did not return a command spec"):format(parsed.adapter), 3)
+  end
+
+  local job_id, err = job_runner.start(current_session, spec, {
+    on_line = function(stream, line)
+      local ok, events = pcall(adapter.parse_line, current_session, stream, line)
+      if not ok then
+        session.append_event(current_session, {
+          type = "adapter.parse_error",
+          adapter = parsed.adapter,
+          level = "error",
+          message = events,
+          raw = line,
+        })
+        return
+      end
+
+      for _, event in ipairs(events or {}) do
+        event.adapter = event.adapter or parsed.adapter
+        session.append_event(current_session, event)
+      end
+    end,
+    on_exit = function()
+      if adapter.finalize then
+        local ok, summary = pcall(adapter.finalize, current_session)
+        if ok and summary then
+          persist.save_summary(current_session.id, summary)
+        elseif not ok then
+          session.append_event(current_session, {
+            type = "adapter.finalize_error",
+            adapter = parsed.adapter,
+            level = "error",
+            message = summary,
+          })
+        end
+      end
+    end,
+  })
+
+  if not job_id then
+    error("leash.nvim: failed to start adapter job: " .. err, 3)
+  end
+
+  return job_id
+end
+
 function M.setup(opts)
   return config.setup(opts)
 end
@@ -77,7 +137,17 @@ function M.start(opts)
     error("leash.nvim: failed to persist session: " .. err, 2)
   end
 
-  notify_pending(("created session %s with %s"):format(current_session.id, parsed.adapter))
+  local adapter = adapters.get(parsed.adapter)
+  if adapter then
+    run_adapter(adapter, current_session, parsed)
+    vim.notify(("leash.nvim: started session %s with %s"):format(current_session.id, parsed.adapter), vim.log.levels.INFO)
+  else
+    notify_pending(
+      ("created session %s with %s; adapter %s is not registered yet")
+        :format(current_session.id, parsed.adapter, parsed.adapter)
+    )
+  end
+
   return current_session
 end
 
@@ -107,8 +177,7 @@ function M.abort()
   config.get()
   local current_session = state.current()
   if current_session then
-    session.set_status(current_session, "aborted")
-    session.save(current_session)
+    job_runner.stop(current_session)
   end
   notify_pending(current_session and ("marked session " .. current_session.id .. " aborted") or "abort session")
 end
@@ -153,5 +222,7 @@ M._parse_start_opts = parse_start_opts
 M._state = state
 M._session = session
 M._persist = persist
+M._adapters = adapters
+M._job_runner = job_runner
 
 return M
