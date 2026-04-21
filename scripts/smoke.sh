@@ -27,3 +27,10 @@ NVIM_LOG_FILE="$DEV_LOG" \
   -c 'qa'
 
 git diff --check
+
+XDG_STATE_HOME="${DEV_STATE}-test" \
+XDG_RUNTIME_DIR="$DEV_RUNTIME" \
+NVIM_LOG_FILE="$DEV_LOG" \
+"$NVIM" --headless -u "$ROOT_DIR/test/minimal_init.lua" \
+  -c "luafile $ROOT_DIR/test/leash_spec.lua" \
+  -c 'qa'
