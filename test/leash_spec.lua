@@ -92,6 +92,58 @@ test("fake adapter parses structured events", function()
   assert_eq(raw[1].type, "adapter.raw", "invalid JSON maps to raw event")
 end)
 
+test("adapter detection follows registration order", function()
+  local first = {
+    name = "zeta",
+    start = function() end,
+    parse_line = function()
+      return {}
+    end,
+    detect = function()
+      return true
+    end,
+  }
+  local second = {
+    name = "alpha",
+    start = function() end,
+    parse_line = function()
+      return {}
+    end,
+    detect = function()
+      return true
+    end,
+  }
+
+  adapters.clear()
+  adapters.register(first)
+  adapters.register(second)
+
+  assert_eq(adapters.detect("/tmp").name, "zeta", "detection priority")
+  assert_eq(adapters.list({ preserve_order = true })[1].name, "zeta", "preserved list order")
+  assert_eq(table.concat(adapters.names(), ","), "alpha,zeta", "display names remain sorted")
+end)
+
+test("builtin adapter lazy loading ignores name mismatches", function()
+  adapters.clear()
+
+  local original = package.loaded["leash.adapters.fake"]
+  package.loaded["leash.adapters.fake"] = {
+    name = "wrong",
+    start = function() end,
+    parse_line = function()
+      return {}
+    end,
+  }
+
+  local ok, loaded = pcall(adapters.get, "fake")
+  package.loaded["leash.adapters.fake"] = original
+  adapters.clear()
+  adapters.register(fake)
+
+  assert_true(ok, "mismatched builtin load should not error")
+  assert_eq(loaded, nil, "mismatched builtin is not registered")
+end)
+
 test("codex adapter builds start command", function()
   local session = session_api.create({ adapter = "codex", root = "/tmp/root", cwd = "/tmp/root" })
   local spec = codex.start({
@@ -183,6 +235,48 @@ test("codex adapter can be selected safely before worktree capture", function()
   assert_true(adapters.get("codex") ~= nil, "codex adapter autoloaded")
 end)
 
+test("non-table capabilities do not trigger isolation deferral", function()
+  local odd = {
+    name = "odd",
+    capabilities = function()
+      return true
+    end,
+    start = function(opts)
+      return {
+        cmd = vim.v.progpath,
+        args = { "--headless", "-u", "NONE", "-i", "NONE", "-c", "qa" },
+        cwd = opts.cwd,
+      }
+    end,
+    parse_line = function()
+      return {}
+    end,
+  }
+
+  leash._state.reset()
+  adapters.clear()
+  adapters.register(odd)
+  leash.setup({
+    adapter = "odd",
+    adapters = {
+      odd = {
+        command = vim.v.progpath,
+      },
+    },
+    review = {
+      use_worktree = true,
+    },
+  })
+
+  local root = tmpdir("leash-odd-capabilities")
+  vim.cmd("cd " .. vim.fn.fnameescape(root))
+  local session = leash.start({ fargs = { "odd", "run" } })
+
+  assert_true(vim.wait(1000, function()
+    return session.status == "review"
+  end), "non-table capabilities should not defer")
+end)
+
 test("successful fake run mutates files and persists events", function()
   local root = tmpdir("leash-success")
   write_file(root .. "/existing.txt", "before")
@@ -229,6 +323,34 @@ test("successful fake run mutates files and persists events", function()
   assert_true(event_seen(events, function(event)
     return event.type == "runner.exit" and event.code == 0
   end), "runner exit event persisted")
+end)
+
+test("adapter summary persistence failures are emitted", function()
+  local root = tmpdir("leash-summary-fail")
+  local original_save_summary = leash._persist.save_summary
+  local ok, err = pcall(function()
+    reset_runtime()
+    leash._persist.save_summary = function()
+      return nil, "summary blocked"
+    end
+
+    vim.cmd("cd " .. vim.fn.fnameescape(root))
+    local session = leash.start({ fargs = { "fake", "summary failure" } })
+
+    assert_true(vim.wait(1000, function()
+      return session.status == "review"
+    end), "session should reach review")
+
+    local events = assert(leash._persist.read_events(session.id))
+    assert_true(event_seen(events, function(event)
+      return event.type == "adapter.finalize_error" and event.message == "summary blocked"
+    end), "summary save failure event persisted")
+  end)
+  leash._persist.save_summary = original_save_summary
+
+  if not ok then
+    error(err, 0)
+  end
 end)
 
 test("failed fake run marks session failed", function()
@@ -316,6 +438,24 @@ test("abort stops fake run", function()
 
   local loaded = assert(leash._session.load(session.id))
   assert_eq(loaded.status, "aborted", "persisted aborted status")
+end)
+
+test("aborting idle session does not emit runner aborted event", function()
+  local root = tmpdir("leash-idle-abort")
+
+  reset_runtime()
+  local session = session_api.create({ adapter = "fake", root = root, cwd = root })
+  leash._state.register(session)
+  assert_true(leash._session.save(session), "session persisted")
+
+  local stopped = leash._job_runner.stop(session)
+  assert_eq(stopped, false, "idle stop return value")
+  assert_eq(session.status, "aborted", "idle session status")
+
+  local events = assert(leash._persist.read_events(session.id))
+  assert_true(not event_seen(events, function(event)
+    return event.type == "runner.aborted"
+  end), "idle stop should not emit runner.aborted")
 end)
 
 if failures > 0 then

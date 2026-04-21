@@ -1,6 +1,7 @@
 local M = {}
 
 local registry = {}
+local registration_order = {}
 local builtin_names = {
   codex = true,
   fake = true,
@@ -42,22 +43,33 @@ end
 
 function M.register(adapter)
   validate(adapter)
+  if not registry[adapter.name] then
+    registration_order[#registration_order + 1] = adapter.name
+  end
   registry[adapter.name] = adapter
   return adapter
 end
 
 function M.unregister(name)
   registry[name] = nil
+
+  for index, registered_name in ipairs(registration_order) do
+    if registered_name == name then
+      table.remove(registration_order, index)
+      break
+    end
+  end
 end
 
 function M.clear()
   registry = {}
+  registration_order = {}
 end
 
 function M.get(name)
   if not registry[name] and builtin_names[name] then
     local ok, adapter = pcall(require, "leash.adapters." .. name)
-    if ok and type(adapter) == "table" then
+    if ok and type(adapter) == "table" and adapter.name == name then
       M.register(adapter)
     end
   end
@@ -85,10 +97,11 @@ function M.names()
   return names
 end
 
-function M.list()
+function M.list(opts)
   local out = {}
+  local names = opts and opts.preserve_order and registration_order or M.names()
 
-  for _, name in ipairs(M.names()) do
+  for _, name in ipairs(names) do
     out[#out + 1] = registry[name]
   end
 
@@ -99,14 +112,17 @@ function M.capabilities(name)
   local adapter = M.require(name)
 
   if adapter.capabilities then
-    return adapter.capabilities() or {}
+    local capabilities = adapter.capabilities()
+    if type(capabilities) == "table" then
+      return capabilities
+    end
   end
 
   return {}
 end
 
 function M.detect(root)
-  for _, adapter in ipairs(M.list()) do
+  for _, adapter in ipairs(M.list({ preserve_order = true })) do
     if adapter.detect then
       local ok, detected = pcall(adapter.detect, root)
       if ok and detected then

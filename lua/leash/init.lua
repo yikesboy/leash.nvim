@@ -99,7 +99,16 @@ local function run_adapter(adapter, current_session, parsed)
       if adapter.finalize then
         local ok, summary = pcall(adapter.finalize, current_session)
         if ok and summary then
-          persist.save_summary(current_session.id, summary)
+          local saved, save_err = persist.save_summary(current_session.id, summary)
+          if not saved then
+            session.append_event(current_session, {
+              type = "adapter.finalize_error",
+              adapter = parsed.adapter,
+              level = "error",
+              message = save_err or "failed to save summary",
+              raw = summary,
+            })
+          end
         elseif not ok then
           session.append_event(current_session, {
             type = "adapter.finalize_error",
@@ -120,7 +129,10 @@ local function run_adapter(adapter, current_session, parsed)
 end
 
 local function should_defer_for_isolation(adapter, current_session)
-  local capabilities = adapter.capabilities and adapter.capabilities() or {}
+  local capabilities = adapter.capabilities and adapter.capabilities() or nil
+  if type(capabilities) ~= "table" then
+    capabilities = {}
+  end
 
   return capabilities.requires_isolation == true and config.get().review.use_worktree and not current_session.worktree_dir
 end

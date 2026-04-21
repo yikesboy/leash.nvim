@@ -28,9 +28,10 @@ NVIM_LOG_FILE="$DEV_LOG" \
 
 git diff --check
 
+LEASH_TEST_SPEC="$ROOT_DIR/test/leash_spec.lua" \
 XDG_STATE_HOME="${DEV_STATE}-test" \
 XDG_RUNTIME_DIR="$DEV_RUNTIME" \
 NVIM_LOG_FILE="$DEV_LOG" \
 "$NVIM" --headless -u "$ROOT_DIR/test/minimal_init.lua" \
-  -c "luafile $ROOT_DIR/test/leash_spec.lua" \
+  -c 'lua dofile(vim.env.LEASH_TEST_SPEC)' \
   -c 'qa'
