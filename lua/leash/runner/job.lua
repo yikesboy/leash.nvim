@@ -228,11 +228,13 @@ function M.stop(session_or_id)
 
   session_api.save(session)
 
-  emit(session, nil, {
-    type = "runner.aborted",
-    job_id = job_id,
-    status = session.status,
-  })
+  if job_id then
+    emit(session, nil, {
+      type = "runner.aborted",
+      job_id = job_id,
+      status = session.status,
+    })
+  end
 
   return job_id ~= nil
 end
