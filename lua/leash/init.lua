@@ -59,7 +59,10 @@ local function parse_start_opts(opts)
 end
 
 local function run_adapter(adapter, current_session, parsed)
-  local adapter_config = config.get().adapters[parsed.adapter] or {}
+  local cfg = config.get()
+  local adapter_config = vim.deepcopy(cfg.adapters[parsed.adapter] or {})
+  adapter_config.allow_unsafe_agent_options = cfg.safety.allow_unsafe_agent_options
+
   local spec = adapter.start({
     adapter = parsed.adapter,
     config = adapter_config,
@@ -116,6 +119,12 @@ local function run_adapter(adapter, current_session, parsed)
   return job_id
 end
 
+local function should_defer_for_isolation(adapter, current_session)
+  local capabilities = adapter.capabilities and adapter.capabilities() or {}
+
+  return capabilities.requires_isolation == true and config.get().review.use_worktree and not current_session.worktree_dir
+end
+
 function M.setup(opts)
   return config.setup(opts)
 end
@@ -139,8 +148,15 @@ function M.start(opts)
 
   local adapter = adapters.get(parsed.adapter)
   if adapter then
-    run_adapter(adapter, current_session, parsed)
-    vim.notify(("leash.nvim: started session %s with %s"):format(current_session.id, parsed.adapter), vim.log.levels.INFO)
+    if should_defer_for_isolation(adapter, current_session) then
+      notify_pending(
+        ("created session %s with %s; adapter requires isolated workspace")
+          :format(current_session.id, parsed.adapter)
+      )
+    else
+      run_adapter(adapter, current_session, parsed)
+      vim.notify(("leash.nvim: started session %s with %s"):format(current_session.id, parsed.adapter), vim.log.levels.INFO)
+    end
   else
     notify_pending(
       ("created session %s with %s; adapter %s is not registered yet")

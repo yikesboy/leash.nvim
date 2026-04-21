@@ -1,6 +1,10 @@
 local M = {}
 
 local registry = {}
+local builtin_names = {
+  codex = true,
+  fake = true,
+}
 
 local required_methods = {
   "start",
@@ -51,6 +55,13 @@ function M.clear()
 end
 
 function M.get(name)
+  if not registry[name] and builtin_names[name] then
+    local ok, adapter = pcall(require, "leash.adapters." .. name)
+    if ok and type(adapter) == "table" then
+      M.register(adapter)
+    end
+  end
+
   return registry[name]
 end
 

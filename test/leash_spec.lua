@@ -1,5 +1,6 @@
 local leash = require("leash")
 local adapters = require("leash.adapters")
+local codex = require("leash.adapters.codex")
 local fake = require("leash.adapters.fake")
 local session_api = require("leash.session")
 
@@ -89,6 +90,97 @@ test("fake adapter parses structured events", function()
 
   local raw = fake.parse_line(session, "stdout", "not json")
   assert_eq(raw[1].type, "adapter.raw", "invalid JSON maps to raw event")
+end)
+
+test("codex adapter builds start command", function()
+  local session = session_api.create({ adapter = "codex", root = "/tmp/root", cwd = "/tmp/root" })
+  local spec = codex.start({
+    config = {
+      command = "codex",
+      sandbox = "workspace-write",
+      approval_policy = "never",
+      extra_args = { "--skip-git-repo-check" },
+    },
+    cwd = session.cwd,
+    prompt = "implement feature",
+    root = session.root,
+    session = session,
+  })
+
+  assert_eq(spec.cmd, "codex", "codex command")
+  assert_eq(spec.cwd, "/tmp/root", "codex cwd")
+  assert_eq(table.concat(spec.args, " "), "--ask-for-approval never exec --json --color never --sandbox workspace-write --skip-git-repo-check implement feature", "codex args")
+end)
+
+test("codex adapter builds resume command", function()
+  local session = session_api.create({
+    adapter = "codex",
+    root = "/tmp/root",
+    cwd = "/tmp/root",
+    vendor_session_id = "thread-123",
+  })
+
+  local spec = codex.resume(session, "continue work", {
+    config = {
+      command = "codex",
+      sandbox = "read-only",
+    },
+  })
+
+  assert_eq(table.concat(spec.args, " "), "--sandbox read-only exec resume --json thread-123 continue work", "resume args with id")
+
+  session.vendor_session_id = nil
+  local last = codex.resume(session, "continue work", {
+    config = {
+      command = "codex",
+    },
+  })
+
+  assert_eq(table.concat(last.args, " "), "exec resume --json --last continue work", "resume args with --last")
+end)
+
+test("codex adapter parses structured events", function()
+  local session = session_api.create({ adapter = "codex", root = "/tmp/root", cwd = "/tmp/root" })
+
+  local started = codex.parse_line(session, "stdout", '{"type":"thread.started","thread_id":"thread-abc"}')
+  assert_eq(session.vendor_session_id, "thread-abc", "codex vendor id")
+  assert_eq(started[1].type, "session.started", "thread.started map")
+
+  local item = codex.parse_line(session, "stdout", '{"type":"item.completed","item":{"type":"tool_call","text":"ran tool"}}')
+  assert_eq(item[1].type, "agent.tool_call", "tool item map")
+  assert_eq(item[1].message, "ran tool", "tool item message")
+
+  local failed = codex.parse_line(session, "stdout", '{"type":"turn.failed","error":{"message":"bad"}}')
+  assert_eq(failed[1].type, "session.failed", "turn.failed map")
+  assert_eq(failed[1].message, "bad", "turn.failed message")
+
+  local raw = codex.parse_line(session, "stdout", "not json")
+  assert_eq(raw[1].type, "adapter.raw", "invalid JSON maps to raw event")
+
+  local unknown = codex.parse_line(session, "stdout", '{"type":"new.event","value":1}')
+  assert_eq(unknown[1].type, "adapter.raw", "unknown JSON event is preserved")
+end)
+
+test("codex adapter can be selected safely before worktree capture", function()
+  leash._state.reset()
+  adapters.clear()
+  leash.setup({
+    adapter = "codex",
+    adapters = {
+      codex = {
+        command = "codex",
+        sandbox = "workspace-write",
+      },
+    },
+  })
+
+  local root = tmpdir("leash-codex-safe")
+  vim.cmd("cd " .. vim.fn.fnameescape(root))
+  local session = leash.start({ fargs = { "codex", "do not run yet" } })
+
+  assert_eq(session.adapter, "codex", "codex session adapter")
+  assert_eq(session.status, "idle", "codex is deferred without worktree")
+  assert_true(adapters.get("codex") ~= nil, "codex adapter autoloaded")
 end)
 
 test("successful fake run mutates files and persists events", function()
