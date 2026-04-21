@@ -3,8 +3,10 @@
 `leash.nvim` is a review-first Neovim plugin for coding-agent sessions.
 
 The current implementation provides the plugin skeleton, configuration, command
-registration, session state, and local persistence. Agent execution, worktree
-capture, diff review, and accept/reject behavior are not implemented yet.
+registration, session state, local persistence, adapter registry, streaming job
+runner, and deterministic fake adapter test harness. Real agent execution,
+worktree capture, diff review, and accept/reject behavior are not implemented
+yet.
 
 ## Current Status
 
@@ -20,6 +22,9 @@ What works now:
 - Session metadata is persisted under `stdpath("state")/leash`.
 - Events can be appended to `events.jsonl`.
 - File and hunk review decisions can be represented and saved.
+- A fake adapter can run deterministic headless jobs through the real runner.
+- The fake fixture can emit JSONL, split JSON lines, write files, delete files,
+  fail with a chosen exit code, and sleep until aborted.
 - Secret-like keys such as `env`, `token`, `secret`, `authorization`, and
   `api_key` are redacted before persistence.
 
@@ -64,7 +69,9 @@ Run headless validation:
 sh scripts/smoke.sh
 ```
 
-That checks session create/save/load, event redaction, and whitespace.
+That checks session create/save/load, event redaction, fake adapter event
+parsing, successful fake runs, failed fake runs, split-line reassembly, aborts,
+fixture file mutation, and whitespace.
 
 If `make` is installed, these wrappers are also available:
 
@@ -95,12 +102,12 @@ Then restart Neovim and run:
 ```
 
 For a remote branch install after pushing, use the normal lazy.nvim repository
-form and pin the feature branch:
+form and pin the branch you want to review:
 
 ```lua
 {
   "OWNER/leash.nvim",
-  branch = "feature/session-state-and-persistence",
+  branch = "feature/fake-adapter-and-test-harness",
   lazy = false,
   config = function()
     require("leash").setup({})
@@ -220,8 +227,8 @@ require("leash").setup({
 ## Development Notes
 
 Feature work should happen on `feature/<workpackage-name>` branches. The current
-session-state work is on:
+branch is:
 
 ```text
-feature/session-state-and-persistence
+feature/fake-adapter-and-test-harness
 ```

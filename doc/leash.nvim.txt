@@ -157,8 +157,8 @@ decisions on top of this storage layout.
 STATUS                                                      *leash.nvim-status*
 
 The current implementation includes the skeleton package, session state,
-persistence, the adapter registry, and the streaming job runner. Real Codex and
-Claude adapters, worktree capture, diff review, and accept/reject behavior are
-implemented by later packages.
+persistence, the adapter registry, the streaming job runner, and a deterministic
+fake adapter for tests. Real Codex and Claude adapters, worktree capture, diff
+review, and accept/reject behavior are implemented by later packages.
 
  vim:tw=78:ts=8:ft=help:norl:
