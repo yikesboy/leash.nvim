@@ -1,0 +1,141 @@
+*leash.nvim.txt*  Review-first coding-agent sessions for Neovim
+
+==============================================================================
+CONTENTS                                                    *leash.nvim-contents*
+
+1. Introduction                                      |leash.nvim-introduction|
+2. Setup                                                   |leash.nvim-setup|
+3. Commands                                             |leash.nvim-commands|
+4. Configuration                                   |leash.nvim-configuration|
+5. Status                                                 |leash.nvim-status|
+
+==============================================================================
+INTRODUCTION                                          *leash.nvim-introduction*
+
+leash.nvim is a review-first orchestration layer for coding-agent CLIs. The
+plugin is designed to run an agent in an isolated workspace, stream progress,
+and let the user review proposed file changes before applying them to the real
+workspace.
+
+This initial package provides the plugin skeleton, configuration, and command
+registration. Agent execution and review UI behavior are implemented by later
+work packages.
+
+==============================================================================
+SETUP                                                        *leash.nvim-setup*
+
+Minimal setup:
+>
+  require("leash").setup()
+<
+
+With selected options:
+>
+  require("leash").setup({
+    adapter = "codex",
+    ui = {
+      file_list_width = 32,
+      log_height = 12,
+    },
+  })
+<
+
+==============================================================================
+COMMANDS                                                  *leash.nvim-commands*
+
+                                                        *:LeashStart*
+:LeashStart [adapter] {prompt}
+        Start a new agent session. This command is registered in the skeleton
+        package and becomes functional when the session and adapter packages are
+        implemented.
+
+                                                        *:LeashOpen*
+:LeashOpen
+        Open the current review.
+
+                                                        *:LeashFiles*
+:LeashFiles
+        Focus the changed-files list.
+
+                                                        *:LeashAcceptFile*
+:LeashAcceptFile
+        Accept all changes for the current file.
+
+                                                        *:LeashRejectFile*
+:LeashRejectFile
+        Reject all changes for the current file.
+
+                                                        *:LeashAbort*
+:LeashAbort
+        Abort the current agent run.
+
+                                                        *:LeashResume*
+:LeashResume [session_id]
+        Reopen a persisted session.
+
+                                                        *:LeashPrompt*
+:'<,'>LeashPrompt
+        Prompt using the current visual selection as context.
+
+==============================================================================
+CONFIGURATION                                      *leash.nvim-configuration*
+
+Defaults:
+>
+  {
+    adapter = "codex",
+    adapters = {
+      codex = {
+        command = "codex",
+        extra_args = {},
+        sandbox = "workspace-write",
+        approval_policy = nil,
+      },
+      claude = {
+        command = "claude",
+        extra_args = {},
+        permission_mode = nil,
+        allowed_tools = nil,
+      },
+    },
+    review = {
+      use_worktree = true,
+      accept_hunks = false,
+      auto_open = true,
+      diffopt = "filler,context:3,linematch:60,inline:word",
+    },
+    limits = {
+      max_file_size = 1024 * 1024,
+      max_file_lines = 20000,
+    },
+    ui = {
+      file_list_width = 32,
+      log_height = 12,
+      keymaps = true,
+    },
+    persistence = {
+      enabled = true,
+      cleanup_worktrees = "manual",
+    },
+    safety = {
+      allow_unsafe_agent_options = false,
+    },
+  }
+<
+
+Unsafe agent options are rejected by default when passed through adapter
+extra_args. Users must explicitly set:
+>
+  safety = {
+    allow_unsafe_agent_options = true,
+  }
+<
+
+==============================================================================
+STATUS                                                      *leash.nvim-status*
+
+The current implementation is the skeleton package. Commands are available and
+configuration is validated, but agent execution, persistence, worktree capture,
+diff review, and accept/reject behavior are implemented by later packages.
+
+ vim:tw=78:ts=8:ft=help:norl:
