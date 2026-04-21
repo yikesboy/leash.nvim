@@ -7,7 +7,8 @@ CONTENTS                                                    *leash.nvim-contents
 2. Setup                                                   |leash.nvim-setup|
 3. Commands                                             |leash.nvim-commands|
 4. Configuration                                   |leash.nvim-configuration|
-5. Status                                                 |leash.nvim-status|
+5. Persistence                                       |leash.nvim-persistence|
+6. Status                                                 |leash.nvim-status|
 
 ==============================================================================
 INTRODUCTION                                          *leash.nvim-introduction*
@@ -45,9 +46,9 @@ COMMANDS                                                  *leash.nvim-commands*
 
                                                         *:LeashStart*
 :LeashStart [adapter] {prompt}
-        Start a new agent session. This command is registered in the skeleton
-        package and becomes functional when the session and adapter packages are
-        implemented.
+        Start a new agent session. The current implementation creates and
+        persists session metadata; agent execution is implemented by later
+        packages.
 
                                                         *:LeashOpen*
 :LeashOpen
@@ -71,7 +72,8 @@ COMMANDS                                                  *leash.nvim-commands*
 
                                                         *:LeashResume*
 :LeashResume [session_id]
-        Reopen a persisted session.
+        Load a persisted session and make it current. Without an ID, the most
+        recently updated persisted session is used.
 
                                                         *:LeashPrompt*
 :'<,'>LeashPrompt
@@ -132,10 +134,30 @@ extra_args. Users must explicitly set:
 <
 
 ==============================================================================
+PERSISTENCE                                            *leash.nvim-persistence*
+
+Session metadata is stored under:
+>
+  stdpath("state")/leash/sessions/{session_id}/
+<
+
+The current package writes:
+>
+  session.json
+  decisions.json
+  events.jsonl
+  summary.json
+<
+
+Session metadata intentionally excludes raw process environments and large file
+contents. Later packages add agent execution, changed-file discovery, and review
+decisions on top of this storage layout.
+
+==============================================================================
 STATUS                                                      *leash.nvim-status*
 
-The current implementation is the skeleton package. Commands are available and
-configuration is validated, but agent execution, persistence, worktree capture,
-diff review, and accept/reject behavior are implemented by later packages.
+The current implementation includes the skeleton package plus session state and
+persistence. Agent execution, worktree capture, diff review, and accept/reject
+behavior are implemented by later packages.
 
  vim:tw=78:ts=8:ft=help:norl:
